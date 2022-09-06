@@ -5,7 +5,7 @@ from torch import nn
 Recurrent sequence classification models for the classification of generated counterfactuals.
 """
 
-device = "cpu"
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 class LSTMClassifier(nn.Module):
     """

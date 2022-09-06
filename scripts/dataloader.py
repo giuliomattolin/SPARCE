@@ -25,6 +25,76 @@ def get_feature_mapping(dataset):
         'userAcceleration.y', 'userAcceleration.z']
     return feature_mapping
 
+def split_data(pathToData, fileFormat):
+    """Split data into train/val/test.
+
+    Args:
+        pathToData (str): Path to data files
+        fileFormat (str): Format of data files
+    """
+    classes = {"dws": 0, "ups":1, "wlk":2, "jog":3} # downstairs, upstairs, walking, jogging
+    ratio_train, ratio_val, ratio_test =  0.8, 0.1, 0.1
+    time_steps = 100
+
+    train_x, val_x, test_x = [], [], []
+    train_y, val_y, test_y = [], [], []
+
+    folders_list = os.listdir(pathToData)
+
+    for folder in folders_list:
+        name = folder[0:3]
+        if name not in classes:
+            continue
+
+        label = np.zeros([len(classes)])
+        label[classes[name]] = 1
+
+        folder_path = os.path.join(pathToData, folder)
+        files_list =  os.listdir(folder_path)
+
+        for file in files_list:
+            file_path = os.path.join(folder_path, file)
+            data = pd.read_csv(file_path, index_col="Unnamed: 0")
+
+            data_x = []
+            data_y = []
+
+            # split data into windows of 100 samples
+            start_window = 0
+            for end_window in range(100, len(data), time_steps):
+                data_x.append(data.iloc[start_window:end_window, :].values)
+                data_y.append(label)
+            
+                start_window = end_window
+
+            # shuffle windows
+            data = list(zip(data_x, data_y))
+            random.shuffle(data)
+            data_x, data_y = zip(*data)
+
+            # split extracted windows into train/val/test
+            len_data = len(data_x)
+            len_train, len_test = int(len_data*ratio_train), int(len_data*ratio_test)
+
+            train_x.extend(data_x[:len_train])
+            train_y.extend(data_y[:len_train])
+            val_x.extend(data_x[len_train:-len_test])
+            val_y.extend(data_y[len_train:-len_test])
+            test_x.extend(data_x[-len_test:])
+            test_y.extend(data_y[-len_test:])
+
+    train_x, val_x, test_x = np.asarray(train_x), np.asarray(val_x), np.asarray(test_x)
+    train_y, val_y, test_y = np.asarray(train_y), np.asarray(val_y), np.asarray(test_y)
+    
+    np.save(os.path.join(pathToData, "X_train" + fileFormat), train_x)
+    np.save(os.path.join(pathToData, "y_train" + fileFormat), train_y)
+
+    np.save(os.path.join(pathToData, "X_val" + fileFormat), val_x)
+    np.save(os.path.join(pathToData, "y_val" + fileFormat), val_y)
+
+    np.save(os.path.join(pathToData, "X_test" + fileFormat), test_x)
+    np.save(os.path.join(pathToData, "y_test" + fileFormat), test_y)
+
 def load_data(pathToData, fileFormat, replicate_labels_indicator=False):
     """Load data subsets for training, validation and testing.
 
@@ -36,6 +106,10 @@ def load_data(pathToData, fileFormat, replicate_labels_indicator=False):
     Returns:
         (X_train, y_train), (X_val, y_val), (X_test, y_test): Data subsets for training, validation and testing
     """
+    # split data into train/val/test, if not already done
+    if not os.path.exists(os.path.join(pathToData, 'X_train' + fileFormat)):
+        split_data(pathToData, fileFormat)
+
     X_train, y_train = np.load(os.path.join(pathToData, 'X_train' + fileFormat)), np.load(os.path.join(pathToData, 'y_train'+ fileFormat))
     X_val, y_val = np.load(os.path.join(pathToData, 'X_val'+ fileFormat)), np.load(os.path.join(pathToData, 'y_val'+ fileFormat))
     X_test, y_test = np.load(os.path.join(pathToData, 'X_test'+ fileFormat)), np.load(os.path.join(pathToData, 'y_test'+ fileFormat))
@@ -77,21 +151,25 @@ def prepare_counterfactual_data(args):
     print(f'Shape of training data: {X_train.shape}, {y_train.shape}')
     print(f'Shape of testing data: {X_test.shape}, {y_test.shape}')
 
+    # sort data by labels (don't know why)
     X_train, y_train = sort_data_by_labels(X_train.reshape((X_train.shape[0], X_train.shape[1], X_train.shape[2])), y_train.reshape((y_train.shape[0], y_train.shape[1])))
     X_test, y_test = sort_data_by_labels(X_test.reshape((X_test.shape[0], X_test.shape[1], X_test.shape[2])), y_test.reshape((y_test.shape[0], y_test.shape[1])))
 
+    # split data between input and target samples based on the defined target class
     X_train_target_samples, y_train_target_samples, X_train_generator_input, y_train_generator_input = split_target_and_input(X_train, y_train, args.target_class)
     X_test_target_samples, y_test_target_samples, X_test_generator_input, y_test_generator_input = split_target_and_input(X_test, y_test, args.target_class)
 
     train_batchsize = args.batchsize
     test_batchsize = 1
-
+    
+    # compute number of epochs
     train_max_samples = min(X_train_target_samples.shape[0], X_train_generator_input.shape[0])
     train_max_batches = min(np.ceil(train_max_samples / train_batchsize), args.max_batches)
 
     test_max_samples = min(X_test_target_samples.shape[0], X_test_generator_input.shape[0])
     test_max_batches = np.ceil(test_max_samples / test_batchsize)
 
+    # shuffle data and take the first train_max_samples/test_max_batches
     X_train_target_samples, y_train_target_samples = take_max_samples(args.seed, X_train_target_samples, y_train_target_samples, train_max_samples)
     X_train_generator_input, y_train_generator_input = take_max_samples(args.seed, X_train_generator_input, y_train_generator_input, train_max_samples)
 

@@ -66,8 +66,10 @@ class CounterfactualTimeGAN(nn.Module):
         print(discriminator)
         print(f'Discriminator number of trainable parameters: {count_model_parameters(discriminator, trainable_only=True)}')
 
-        # load pretrained classification model
+        # load pretrained classification model and freeze weights
         classifier = load_model(args.dataset, classifier_model_name)
+        for param in classifier.parameters():
+            param.requires_grad = False
         print(f'Classifier number of trainable parameters: {count_model_parameters(classifier, trainable_only=True)}')
 
         # loss function
@@ -181,7 +183,7 @@ class CounterfactualTimeGAN(nn.Module):
         adv_loss = self._compute_adversarial_loss(fake_out)
         generator_loss = self._compute_generator_loss(adv_loss, cls_loss, similarity_loss, sparsity_loss, jerk_loss)
 
-        print(f'[Avg Classification Loss: {np.mean(cls_loss.detach().cpu().numpy()):.5f}] [Avg Adversarial Loss: {np.mean(adv_loss.detach().cpu().numpy()):.5f}] [Avg Similarity Loss: {np.mean(similarity_loss.detach().cpu().numpy()):.5f}] [Avg Sparsity Loss: {np.mean(sparsity_loss.detach().cpu().numpy()):.5f}] [Avg Jerk Loss: {np.mean(jerk_loss.detach().cpu().numpy()):.5f}]')
+        # print(f'[Avg Classification Loss: {np.mean(cls_loss.detach().cpu().numpy()):.5f}] [Avg Adversarial Loss: {np.mean(adv_loss.detach().cpu().numpy()):.5f}] [Avg Similarity Loss: {np.mean(similarity_loss.detach().cpu().numpy()):.5f}] [Avg Sparsity Loss: {np.mean(sparsity_loss.detach().cpu().numpy()):.5f}] [Avg Jerk Loss: {np.mean(jerk_loss.detach().cpu().numpy()):.5f}]')
 
         self.generator_optim.zero_grad() # clear the gradients to avoid accumulating gradients
         generator_loss.backward() 
@@ -231,6 +233,7 @@ class CounterfactualTimeGAN(nn.Module):
             # switch to train mode (e.g. using dropout)
             self.generator.train()
             self.discriminator.train()
+            self.classifier.train()
 
             train_generator_loss, train_discriminator_loss = 0, 0
             sequences_per_epoch, target_samples_per_epoch, query_samples_per_epoch, query_labels_per_epoch, out_cf_per_epoch, losses_per_epoch = [], [], [], [], [], []
@@ -254,7 +257,7 @@ class CounterfactualTimeGAN(nn.Module):
 
                 # take a training step
                 generated_input, generator_loss, discriminator_loss, out_cf_classes, losses = self._train_step(real_input=X, real_labels=y, generator_input=generator_input)            
-                print(f'[Epoch: {epoch+1}/{self.args.num_epochs}] [Batch: {batch_count}/{int(max_batches)}] [D Loss: {discriminator_loss}] [G Loss: {generator_loss}] \n')
+                # print(f'[Epoch: {epoch+1}/{self.args.num_epochs}] [Batch: {batch_count}/{int(max_batches)}] [D Loss: {discriminator_loss}] [G Loss: {generator_loss}] \n')
 
                 sequences_per_epoch.append(generated_input.detach())
                 target_samples_per_epoch.append(X.detach())
@@ -270,6 +273,8 @@ class CounterfactualTimeGAN(nn.Module):
             train_loss_per_epoch_generator.append(train_generator_loss / num_batches)
             train_loss_per_epoch_discriminator.append(train_discriminator_loss / num_batches)
             losses_overall.append(losses_per_epoch)
+            
+            print(f'[Epoch: {epoch+1}/{self.args.num_epochs}] [G Loss: {train_generator_loss / num_batches}] [D Loss: {train_discriminator_loss / num_batches}] \n')
 
         generated_sequences = []
         for batch in range(len(sequences_per_epoch)):
@@ -300,6 +305,7 @@ class CounterfactualTimeGAN(nn.Module):
 
         self.generator.eval()
         self.discriminator.eval()
+        self.classifier.eval()
 
         sequences_per_epoch, target_samples_per_epoch, query_samples_per_epoch, query_labels_per_epoch, out_cf_per_epoch, losses_per_epoch = [], [], [], [], [], []
         batch_count = 0
@@ -418,13 +424,13 @@ class CounterfactualTimeGAN(nn.Module):
             generated_sequences = np.array(generated_sequences)
             original_sequences = np.array(original_sequences)
             query_sequences = np.array(query_sequences)
-            now = datetime.now()
-            date_and_time = now.strftime("%d_%m_%Y_%H_%M_%S_")
+            # now = datetime.now()
+            # date_and_time = now.strftime("%d_%m_%Y_%H_%M_%S_")
         
 
             if self.args.save:
-                np.save(os.path.join('counterfactuals', self.args.dataset, date_and_time + 'testing_' + self.args.approach + '_counterfactuals.npy'), generated_sequences)
-                np.save(os.path.join('counterfactuals', self.args.dataset, date_and_time + 'testing_' + self.args.approach + '_targets.npy'), original_sequences)
-                np.save(os.path.join('counterfactuals', self.args.dataset, date_and_time + 'testing_' + self.args.approach + '_queries.npy'), query_sequences)
+                np.save(os.path.join('counterfactuals', self.args.dataset, 'testing_' + self.args.approach + '_counterfactuals.npy'), generated_sequences)
+                np.save(os.path.join('counterfactuals', self.args.dataset, 'testing_' + self.args.approach + '_targets.npy'), original_sequences)
+                np.save(os.path.join('counterfactuals', self.args.dataset, 'testing_' + self.args.approach + '_queries.npy'), query_sequences)
 
             return testdoc

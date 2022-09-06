@@ -10,7 +10,7 @@ from dataloader import *
 
 def init_argparse():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--num_epochs", type=int, default=20) 
+    parser.add_argument("--num_epochs", type=int, default=100) 
     parser.add_argument("--target_class", type=int, default=1)
     parser.add_argument("--max_batches", type=int, default=500)
     parser.add_argument("--dataset", type=str, default="motionsense", help="motionsense, simulated")
@@ -28,7 +28,7 @@ def init_argparse():
     parser.add_argument("--max_iter", type=int, default=10)
     parser.add_argument("--init_lambda", type=float, default=1.0)
     parser.add_argument("--approach", type=str, default="sparce")
-    parser.add_argument("--save", type=bool, default=False, help="save experiment file, originals and cfs")
+    parser.add_argument("--save", type=bool, default=True, help="save experiment file, originals and cfs")
     parser.add_argument("--max_lambda_steps", type=int, default=5)
     parser.add_argument("--lambda_increase", type=float, default=0.001)
 
@@ -65,12 +65,12 @@ def main():
         testdoc = model.test(test_dl=test_dl_real_samples, generator_dl = test_dl_generator_input, max_samples=test_max_samples, max_batches=test_max_batches, testdoc=testdoc)
 
 
-    now = datetime.now()
-    date_and_time = now.strftime("%d_%m_%Y_%H_%M_%S_")
+    # now = datetime.now()
+    # date_and_time = now.strftime("%d_%m_%Y_%H_%M_%S_")
     doc_df = pd.DataFrame(testdoc)
     print(doc_df)
     if args.save:
-        doc_df.to_csv(os.path.join(os.getcwd(), 'experiments', args.dataset, date_and_time + args.approach + '.csv'), index=False)
+        doc_df.to_csv(os.path.join(os.getcwd(), 'experiments', args.dataset, args.approach + '.csv'), index=False)
         print("Experiment done. File saved.")
 
 if __name__ == "__main__":

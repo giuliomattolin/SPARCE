@@ -11,11 +11,11 @@ from utils import test_classifier, save_model
 # set directories
 home = os.path.expanduser('~')
 pathToProject = os.getcwd()
-dataset = 'simulated'
+dataset = 'motionsense'
 pathToData = os.path.join(pathToProject, 'data', dataset) 
 fileFormat = '.npy'
 batchsize = 32
-device = "cpu"
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 replicate_labels_indicator = False # use for many-to-many classification
 bidirectional_indicator = True
@@ -50,7 +50,7 @@ model = model.to(device)
 print(model)
 
 # define loss function and optimizer
-num_epochs = 5
+num_epochs = 100
 INIT_LR = 1e-3
 loss_fn = nn.CrossEntropyLoss()
 optimizer = Adam(model.parameters(), lr=INIT_LR)
@@ -135,6 +135,7 @@ def train(num_epochs, train_dl, val_dl, model, loss_fn, optimizer):
     plt.legend()
     plt.xlabel('Epoch')
     plt.ylabel('Loss')
+    plt.savefig(os.path.join(pathToProject, 'figures', dataset, 'classifier_loss.png'))
 
 
     plt.figure(fig2)
@@ -142,8 +143,9 @@ def train(num_epochs, train_dl, val_dl, model, loss_fn, optimizer):
     plt.plot(np.linspace(1, num_epochs, num_epochs).astype(int), train_acc_per_epoch, label='training')
     plt.plot(np.linspace(1, num_epochs, num_epochs).astype(int), val_acc_per_epoch, label='validation')
     plt.legend()
-    plt.xlabel('Epoch', fontsize=18)
+    plt.xlabel('Epoch')
     plt.ylabel('Accuracy')
+    plt.savefig(os.path.join(pathToProject, 'figures', dataset, 'classifier_accuracy.png'))
 
 def test(test_dl, model, loss_fn):
     test_classifier(test_dl, model, loss_fn)
